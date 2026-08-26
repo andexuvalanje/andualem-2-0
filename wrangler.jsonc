@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "andualem-2-0",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-26",
+  "assets": {
+    "directory": "./public"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "andualem-db",
+      "database_id": "45a50c85-0d40-49f1-a4f5-fe2cf5d3b15c",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "andualem-2-0",
+  "version": "2.0.0",
+  "description": "ANDUALEM 2.0 V2 - Local-First Personal Operating System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  }
+}
