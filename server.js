@@ -146,26 +146,34 @@ app.post('/api/days/:date', async (req, res) => {
         }
         const { shift_type, planned_capacity, dragon, learning_gap, ship_target, reflection } = req.body;
 
-        const existing = await dbGet('SELECT id FROM days WHERE date = ?', [date]);
-        const capacity = planned_capacity || SHIFT_CAPACITIES[shift_type] || '3h 45m';
+        const existing = await dbGet('SELECT id, shift_type, planned_capacity FROM days WHERE date = ?', [date]);
+
+        const p_shift_type = shift_type !== undefined ? shift_type : null;
+        const p_planned_capacity = planned_capacity !== undefined ? planned_capacity : (shift_type !== undefined ? SHIFT_CAPACITIES[shift_type] : null);
+        const p_dragon = dragon !== undefined ? dragon : null;
+        const p_learning_gap = learning_gap !== undefined ? learning_gap : null;
+        const p_ship_target = ship_target !== undefined ? ship_target : null;
+        const p_reflection = reflection !== undefined ? reflection : null;
 
         if (existing) {
             await dbRun(`
                 UPDATE days
                 SET shift_type = COALESCE(?, shift_type),
-                    planned_capacity = ?,
+                    planned_capacity = COALESCE(?, planned_capacity),
                     dragon = COALESCE(?, dragon),
                     learning_gap = COALESCE(?, learning_gap),
                     ship_target = COALESCE(?, ship_target),
                     reflection = COALESCE(?, reflection),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE date = ?
-            `, [shift_type, capacity, dragon, learning_gap, ship_target, reflection, date]);
+            `, [p_shift_type, p_planned_capacity, p_dragon, p_learning_gap, p_ship_target, p_reflection, date]);
         } else {
+            const finalShift = shift_type || 'normal';
+            const finalCapacity = planned_capacity || SHIFT_CAPACITIES[finalShift] || '3h 45m';
             await dbRun(`
                 INSERT INTO days (date, shift_type, planned_capacity, dragon, learning_gap, ship_target, reflection)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            `, [date, shift_type || 'normal', capacity, dragon || '', learning_gap || '', ship_target || '', reflection || '']);
+            `, [date, finalShift, finalCapacity, dragon || '', learning_gap || '', ship_target || '', reflection || '']);
         }
 
         const updated = await dbGet('SELECT * FROM days WHERE date = ?', [date]);
@@ -576,7 +584,7 @@ app.get('/api/dashboard/summary', async (req, res) => {
         const monthCompletionAvg = await dbGet(`
             SELECT AVG(completion_rate) as avg_rate FROM (
                 SELECT d.date,
-                       (CAST(SUM(CASE WHEN l.completed = 1 THEN 1 ELSE 0 END) AS FLOAT) / COUNT(t.id)) * 100 as completion_rate
+                       (CAST(SUM(CASE WHEN l.completed = 1 AND (t.category = 'life' OR t.shift_type = d.shift_type OR t.shift_type = 'all') THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(COUNT(CASE WHEN (t.category = 'life' OR t.shift_type = d.shift_type OR t.shift_type = 'all') THEN 1 END), 0)) * 100 as completion_rate
                 FROM days d
                 JOIN tasks t ON t.active = 1
                 LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = d.date

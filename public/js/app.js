@@ -107,9 +107,6 @@ async function renderToday(fetchFromApi = true) {
     if (fetchFromApi || !currentDayData) {
         const res = await API.getDay(date);
         if (res && res.success) {
-            if (currentDayData && currentDayData.day && currentDayData.day.shift_type && res.day) {
-                res.day.shift_type = currentDayData.day.shift_type;
-            }
             currentDayData = res;
         }
     }
@@ -681,23 +678,22 @@ async function renderHistoryView() {
     if (!res.success) return;
 
     const container = document.getElementById("historyGrid");
+    if (!res.days || res.days.length === 0) {
+        container.innerHTML = '<div class="card span-12" style="text-align:center; padding:24px; color: var(--muted);">No historical day records found.</div>';
+        return;
+    }
     container.innerHTML = res.days.map(d => `
         <div class="card span-4" style="cursor:pointer;" onclick="inspectHistoryDay('${d.date}')">
             <div class="card-header">
                 <h2>${d.date}</h2>
                 <span class="badge">${(d.shift_type || 'normal').toUpperCase()}</span>
             </div>
-            <p style="font-size:11px; color: var(--cyan); margin-bottom:8px;">🐉 ${d.dragon || 'No Dragon'}</p>
-            <p style="font-size:10px; color: var(--muted); margin-bottom:8px;">Target: ${d.ship_target || 'N/A'}</p>
-            <div style="font-size:9px; color: var(--text);">Click to inspect day snapshot</div>
+            <p style="font-size:11px; color: var(--cyan); margin-bottom:6px;">🐉 ${d.dragon || 'No Dragon'}</p>
+            <p style="font-size:10px; color: var(--violet); margin-bottom:6px;">🧠 ${d.learning_gap || 'No Learning Gap'}</p>
+            <p style="font-size:10px; color: var(--muted); margin-bottom:8px;">🚀 Target: ${d.ship_target || 'N/A'}</p>
+            <div style="font-size:9px; color: var(--text-secondary); border-top:1px solid var(--card-border); padding-top:6px; margin-top:4px;">Click to inspect day snapshot</div>
         </div>
     `).join("");
-}
-
-async function inspectHistoryDay(date) {
-    document.getElementById("datePicker").value = date;
-    setView('today');
-    toast(`LOADED HISTORY FOR ${date}`);
 }
 
 // =========================================================
@@ -851,14 +847,18 @@ async function inspectHistoryDay(date) {
     document.getElementById("modalHistoryDate").textContent = `DATE: ${date} (${modeConfig.label.toUpperCase()})`;
     document.getElementById("modalHistoryBody").innerHTML = `
         <div style="display:grid; gap:16px;">
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
                 <div class="card">
                     <div style="font-size:10px; color:var(--cyan); font-weight:800;">🐉 TODAY'S DRAGON</div>
-                    <div style="font-size:13px; margin-top:4px;">${d.dragon || 'None defined'}</div>
+                    <div style="font-size:12px; margin-top:4px;">${d.dragon || 'None defined'}</div>
+                </div>
+                <div class="card">
+                    <div style="font-size:10px; color:var(--violet); font-weight:800;">🧠 LEARNING GAP</div>
+                    <div style="font-size:12px; margin-top:4px;">${d.learning_gap || 'None defined'}</div>
                 </div>
                 <div class="card">
                     <div style="font-size:10px; color:var(--green); font-weight:800;">🚀 SHIP TARGET</div>
-                    <div style="font-size:13px; margin-top:4px;">${d.ship_target || 'None defined'}</div>
+                    <div style="font-size:12px; margin-top:4px;">${d.ship_target || 'None defined'}</div>
                 </div>
             </div>
 

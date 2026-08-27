@@ -99,7 +99,16 @@ const API = {
         let learning = [];
 
         if (res.success) {
-            if (res.day) day = { ...local, ...res.day };
+            if (res.day) {
+                day = {
+                    ...local,
+                    ...res.day,
+                    dragon: (res.day.dragon !== undefined && res.day.dragon !== null) ? res.day.dragon : (local.dragon || ''),
+                    learning_gap: (res.day.learning_gap !== undefined && res.day.learning_gap !== null) ? res.day.learning_gap : (local.learning_gap || ''),
+                    ship_target: (res.day.ship_target !== undefined && res.day.ship_target !== null) ? res.day.ship_target : (local.ship_target || ''),
+                    reflection: (res.day.reflection !== undefined && res.day.reflection !== null) ? res.day.reflection : (local.reflection || '')
+                };
+            }
             if (Array.isArray(res.tasks) && res.tasks.length > 0) tasks = res.tasks;
             if (Array.isArray(res.deepWork)) deepWork = res.deepWork;
             if (Array.isArray(res.learning)) learning = res.learning;
