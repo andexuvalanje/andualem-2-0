@@ -17,6 +17,11 @@ const SHIFT_CAPACITIES = {
     recovery: 'LOW / OPTIONAL'
 };
 
+// Date format validator (YYYY-MM-DD)
+function isValidDate(dateStr) {
+    return typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
+
 // =========================================================
 // DAYS ENDPOINTS
 // =========================================================
@@ -25,6 +30,10 @@ const SHIFT_CAPACITIES = {
 app.get('/api/days/:date', async (req, res) => {
     try {
         const { date } = req.params;
+        if (!isValidDate(date)) {
+            return res.status(400).json({ success: false, error: 'Invalid date format. Expected YYYY-MM-DD' });
+        }
+
         let day = await dbGet('SELECT * FROM days WHERE date = ?', [date]);
 
         if (!day) {
@@ -68,10 +77,10 @@ app.get('/api/days/:date', async (req, res) => {
 
         res.json({
             success: true,
-            day,
-            tasks,
-            deepWork,
-            learning
+            day: day || null,
+            tasks: tasks || [],
+            deepWork: deepWork || [],
+            learning: learning || []
         });
     } catch (err) {
         console.error("Error fetching day:", err);
@@ -83,6 +92,9 @@ app.get('/api/days/:date', async (req, res) => {
 app.post('/api/days/:date', async (req, res) => {
     try {
         const { date } = req.params;
+        if (!isValidDate(date)) {
+            return res.status(400).json({ success: false, error: 'Invalid date format. Expected YYYY-MM-DD' });
+        }
         const { shift_type, planned_capacity, dragon, learning_gap, ship_target, reflection } = req.body;
 
         const existing = await dbGet('SELECT id FROM days WHERE date = ?', [date]);
@@ -129,7 +141,7 @@ app.get('/api/days', async (req, res) => {
         params.push(parseInt(limit));
 
         const days = await dbAll(sql, params);
-        res.json({ success: true, days });
+        res.json({ success: true, days: days || [] });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -139,6 +151,9 @@ app.get('/api/days', async (req, res) => {
 app.post('/api/reset-day/:date', async (req, res) => {
     try {
         const { date } = req.params;
+        if (!isValidDate(date)) {
+            return res.status(400).json({ success: false, error: 'Invalid date format. Expected YYYY-MM-DD' });
+        }
         await dbRun(`
             UPDATE days
             SET shift_type = 'normal',

@@ -46,7 +46,7 @@ const Charts = {
 
             // Y-axis labels
             ctx.fillStyle = '#68778b';
-            ctx.font = '9px Segoe UI, sans-serif';
+            ctx.font = '9px Orbitron, sans-serif';
             ctx.fillText(Math.round(maxValue * (i / 4)), 10, y + 3);
         }
 

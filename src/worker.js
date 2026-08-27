@@ -21,6 +21,20 @@ function jsonResponse(data, status = 200) {
     });
 }
 
+function isValidDate(dateStr) {
+    return typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
+
+async function safeAll(stmt) {
+    try {
+        const res = await stmt.all();
+        return (res && Array.isArray(res.results)) ? res.results : [];
+    } catch (err) {
+        console.error("D1 query error:", err);
+        return [];
+    }
+}
+
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
@@ -54,6 +68,10 @@ export default {
             if (pathname.startsWith('/api/days/')) {
                 const date = pathname.split('/api/days/')[1];
 
+                if (!isValidDate(date)) {
+                    return jsonResponse({ success: false, error: 'Invalid date format. Expected YYYY-MM-DD' }, 400);
+                }
+
                 if (method === 'GET') {
                     let day = await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(date).first();
 
@@ -64,34 +82,34 @@ export default {
                         day = await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(date).first();
                     }
 
-                    const tasks = (await env.DB.prepare(`
+                    const tasks = await safeAll(env.DB.prepare(`
                         SELECT t.id as task_id, t.task_name, t.category, t.shift_type, t.priority,
                                COALESCE(l.completed, 0) as completed, l.completed_at
                         FROM tasks t
                         LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = ?
                         WHERE t.active = 1
                         ORDER BY t.priority ASC
-                    `).bind(date).all()).results;
+                    `).bind(date));
 
-                    const deepWork = (await env.DB.prepare(`
+                    const deepWork = await safeAll(env.DB.prepare(`
                         SELECT dw.*, p.name as project_name, b.feature_name
                         FROM deep_work_sessions dw
                         LEFT JOIN projects p ON dw.project_id = p.id
                         LEFT JOIN builds b ON dw.build_id = b.id
                         WHERE dw.date = ?
                         ORDER BY dw.created_at ASC
-                    `).bind(date).all()).results;
+                    `).bind(date));
 
-                    const learning = (await env.DB.prepare(`
+                    const learning = await safeAll(env.DB.prepare(`
                         SELECT l.*, p.name as project_name, b.feature_name
                         FROM learning l
                         LEFT JOIN projects p ON l.project_id = p.id
                         LEFT JOIN builds b ON l.build_id = b.id
                         WHERE l.date = ?
                         ORDER BY l.created_at ASC
-                    `).bind(date).all()).results;
+                    `).bind(date));
 
-                    return jsonResponse({ success: true, day, tasks, deepWork, learning });
+                    return jsonResponse({ success: true, day: day || null, tasks, deepWork, learning });
                 }
 
                 if (method === 'POST') {
@@ -139,12 +157,15 @@ export default {
                 sql += ' ORDER BY date DESC LIMIT ?';
                 params.push(limit);
 
-                const days = (await env.DB.prepare(sql).bind(...params).all()).results;
+                const days = await safeAll(env.DB.prepare(sql).bind(...params));
                 return jsonResponse({ success: true, days });
             }
 
             if (pathname.startsWith('/api/reset-day/') && method === 'POST') {
                 const date = pathname.split('/api/reset-day/')[1];
+                if (!isValidDate(date)) {
+                    return jsonResponse({ success: false, error: 'Invalid date format. Expected YYYY-MM-DD' }, 400);
+                }
                 await env.DB.prepare(`
                     UPDATE days
                     SET shift_type = 'normal',
@@ -183,14 +204,14 @@ export default {
             // =========================================================
             if (pathname === '/api/projects') {
                 if (method === 'GET') {
-                    const projects = (await env.DB.prepare(`
+                    const projects = await safeAll(env.DB.prepare(`
                         SELECT p.*,
                                (SELECT COUNT(*) FROM builds b WHERE b.project_id = p.id) as total_builds,
                                (SELECT COUNT(*) FROM builds b WHERE b.project_id = p.id AND b.status = 'SHIPPED') as shipped_builds,
                                (SELECT COALESCE(SUM(duration_minutes), 0) FROM deep_work_sessions dw WHERE dw.project_id = p.id) as total_deep_work_minutes
                         FROM projects p
                         ORDER BY p.created_at DESC
-                    `).all()).results;
+                    `));
                     return jsonResponse({ success: true, projects });
                 }
 
@@ -252,7 +273,7 @@ export default {
                     }
                     sql += ' ORDER BY b.id DESC';
 
-                    const builds = (await env.DB.prepare(sql).bind(...params).all()).results;
+                    const builds = await safeAll(env.DB.prepare(sql).bind(...params));
                     return jsonResponse({ success: true, builds });
                 }
 
@@ -339,7 +360,7 @@ export default {
                     sql += ' ORDER BY dw.date DESC, dw.id DESC LIMIT ?';
                     params.push(limit);
 
-                    const sessions = (await env.DB.prepare(sql).bind(...params).all()).results;
+                    const sessions = await safeAll(env.DB.prepare(sql).bind(...params));
                     return jsonResponse({ success: true, sessions });
                 }
 
@@ -393,7 +414,7 @@ export default {
                     sql += ' ORDER BY l.date DESC, l.id DESC LIMIT ?';
                     params.push(limit);
 
-                    const entries = (await env.DB.prepare(sql).bind(...params).all()).results;
+                    const entries = await safeAll(env.DB.prepare(sql).bind(...params));
                     return jsonResponse({ success: true, learning: entries });
                 }
 
@@ -502,16 +523,16 @@ export default {
             }
 
             if (pathname === '/api/dashboard/trends' && method === 'GET') {
-                const deepWorkMonthly = (await env.DB.prepare(`
+                const deepWorkMonthly = await safeAll(env.DB.prepare(`
                     SELECT strftime('%Y-%m', date) as month,
                            ROUND(SUM(duration_minutes) / 60.0, 1) as hours
                     FROM deep_work_sessions
                     GROUP BY month
                     ORDER BY month ASC
                     LIMIT 12
-                `).all()).results;
+                `));
 
-                const shippedMonthly = (await env.DB.prepare(`
+                const shippedMonthly = await safeAll(env.DB.prepare(`
                     SELECT strftime('%Y-%m', shipped_at) as month,
                            COUNT(*) as shipped_count
                     FROM builds
@@ -519,7 +540,7 @@ export default {
                     GROUP BY month
                     ORDER BY month ASC
                     LIMIT 12
-                `).all()).results;
+                `));
 
                 return jsonResponse({
                     success: true,
@@ -531,7 +552,7 @@ export default {
             }
 
             if (pathname === '/api/shift-analysis' && method === 'GET') {
-                const stats = (await env.DB.prepare(`
+                const stats = await safeAll(env.DB.prepare(`
                     SELECT d.shift_type,
                            COUNT(DISTINCT d.date) as total_days,
                            ROUND(AVG(COALESCE(dw.daily_deep_work, 0)), 1) as avg_deep_work_mins,
@@ -550,15 +571,15 @@ export default {
                         GROUP BY date
                     ) tl ON d.date = tl.date
                     GROUP BY d.shift_type
-                `).all()).results;
+                `));
 
-                const shippedByShift = (await env.DB.prepare(`
+                const shippedByShift = await safeAll(env.DB.prepare(`
                     SELECT d.shift_type, COUNT(b.id) as shipped_count
                     FROM builds b
                     JOIN days d ON date(b.shipped_at) = d.date
                     WHERE b.status = 'SHIPPED'
                     GROUP BY d.shift_type
-                `).all()).results;
+                `));
 
                 return jsonResponse({ success: true, shift_stats: stats, shipped_by_shift: shippedByShift });
             }
@@ -567,13 +588,13 @@ export default {
             // 8. DATA EXPORT & MIGRATION ENDPOINTS
             // =========================================================
             if (pathname === '/api/export' && method === 'GET') {
-                const days = (await env.DB.prepare('SELECT * FROM days ORDER BY date ASC').all()).results;
-                const tasks = (await env.DB.prepare('SELECT * FROM tasks').all()).results;
-                const taskLog = (await env.DB.prepare('SELECT * FROM daily_task_log').all()).results;
-                const projects = (await env.DB.prepare('SELECT * FROM projects').all()).results;
-                const builds = (await env.DB.prepare('SELECT * FROM builds').all()).results;
-                const deepWork = (await env.DB.prepare('SELECT * FROM deep_work_sessions').all()).results;
-                const learning = (await env.DB.prepare('SELECT * FROM learning').all()).results;
+                const days = await safeAll(env.DB.prepare('SELECT * FROM days ORDER BY date ASC'));
+                const tasks = await safeAll(env.DB.prepare('SELECT * FROM tasks'));
+                const taskLog = await safeAll(env.DB.prepare('SELECT * FROM daily_task_log'));
+                const projects = await safeAll(env.DB.prepare('SELECT * FROM projects'));
+                const builds = await safeAll(env.DB.prepare('SELECT * FROM builds'));
+                const deepWork = await safeAll(env.DB.prepare('SELECT * FROM deep_work_sessions'));
+                const learning = await safeAll(env.DB.prepare('SELECT * FROM learning'));
 
                 const backupData = {
                     version: "2.0",
@@ -615,7 +636,7 @@ export default {
                 // Case B: Legacy localStorage state import
                 if (body.state && typeof body.state === 'object') {
                     let count = 0;
-                    const tasksList = (await env.DB.prepare("SELECT id, task_name, category, shift_type FROM tasks WHERE active = 1").all()).results;
+                    const tasksList = await safeAll(env.DB.prepare("SELECT id, task_name, category, shift_type FROM tasks WHERE active = 1"));
 
                     for (const [date, data] of Object.entries(body.state)) {
                         if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) continue;

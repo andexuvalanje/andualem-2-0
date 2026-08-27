@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ANDUALEM 2.0 V2 — Personal Operating System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -12,10 +15,13 @@
 
     <div class="app">
 
-        <!-- HEADER -->
+        <!-- STREAMLINED COMMAND HEADER -->
         <header class="header">
-            <div>
-                <div class="eyebrow">PERSONAL OPERATING SYSTEM V2</div>
+            <div class="header-brand">
+                <div class="eyebrow">
+                    <span class="eyebrow-dot"></span>
+                    PERSONAL OPERATING SYSTEM V2 · COMMAND CENTER
+                </div>
                 <h1>ANDUALEM 2.0</h1>
                 <p class="subtitle">
                     Protect sleep. Honor family. Build every normal day. Exploit night-shift opportunities.
@@ -24,12 +30,12 @@
             </div>
 
             <div class="header-actions">
-                <button class="btn" onclick="resetCurrentDay()">RESET DAY</button>
-                <button class="btn btn-danger" onclick="setView('settings')">SETTINGS</button>
+                <button class="btn btn-secondary" onclick="resetCurrentDay()">↺ RESET DAY</button>
+                <button class="btn btn-ghost" onclick="setView('settings')">⚙ SETTINGS</button>
             </div>
         </header>
 
-        <!-- NAVIGATION TABS -->
+        <!-- COMMAND NAVIGATION BAR -->
         <nav class="nav-bar">
             <button class="nav-btn active" data-view="today" onclick="setView('today')">⚡ TODAY</button>
             <button class="nav-btn" data-view="dashboard" onclick="setView('dashboard')">📊 DASHBOARD</button>
@@ -47,28 +53,28 @@
         ====================================================== -->
         <div id="view-today" class="view-section active">
 
-            <!-- HERO -->
-            <section class="card hero">
+            <!-- OPERATING STATUS PANEL (HERO) -->
+            <section class="card status-panel">
                 <div class="date-row">
                     <div>
-                        <h2 id="dateTitle">Today</h2>
-                        <div class="field-description">Ethiopian clock · Local SQLite persistence · Offline-First</div>
+                        <h2 id="dateTitle">OPERATING STATUS — TODAY</h2>
+                        <div class="field-description">Ethiopian clock · Local SQLite persistence · Offline-First Engine</div>
                     </div>
                     <input id="datePicker" class="date-input" type="date" onchange="renderToday()">
                 </div>
 
-                <!-- MODES -->
+                <!-- MODE SWITCHER TABS -->
                 <div class="mode-tabs">
                     <button class="btn mode-btn active" data-mode="normal" onclick="changeMode('normal')">☀ NORMAL SHIFT</button>
-                    <button class="btn mode-btn" data-mode="night" onclick="changeMode('night')">◉ NIGHT SHIFT</button>
-                    <button class="btn mode-btn" data-mode="recovery" onclick="changeMode('recovery')">◇ RECOVERY</button>
+                    <button class="btn mode-btn" data-mode="night" onclick="changeMode('night')">◉ NIGHT SHIFT ACCELERATOR</button>
+                    <button class="btn mode-btn" data-mode="recovery" onclick="changeMode('recovery')">◇ RECOVERY PROTOCOL</button>
                 </div>
 
-                <!-- STATS -->
+                <!-- COMPACT METRICS GRID -->
                 <div class="stats">
-                    <div class="stat">
+                    <div class="stat stat-primary-mode">
                         <div class="stat-label">CURRENT MODE</div>
-                        <div class="stat-value" id="modeStat">Normal Shift</div>
+                        <div class="stat-value stat-value-highlight" id="modeStat">Normal Shift</div>
                     </div>
                     <div class="stat">
                         <div class="stat-label">PERSONAL CAPACITY</div>
@@ -76,7 +82,7 @@
                     </div>
                     <div class="stat">
                         <div class="stat-label">DAILY COMPLETION</div>
-                        <div class="stat-value" id="completionStat">0%</div>
+                        <div class="stat-value stat-value-highlight" id="completionStat">0%</div>
                     </div>
                     <div class="stat">
                         <div class="stat-label">SLEEP ANCHOR</div>
@@ -84,10 +90,10 @@
                     </div>
                 </div>
 
-                <!-- DAILY PROGRESS -->
+                <!-- DAILY OPERATING PROGRESS -->
                 <div class="progress-section">
                     <div class="progress-label">
-                        <span>Daily Operating System</span>
+                        <span>Daily Operating System Completion</span>
                         <span id="dailyProgressText">0%</span>
                     </div>
                     <div class="progress">
@@ -96,14 +102,14 @@
                 </div>
             </section>
 
-            <!-- MAIN GRID -->
+            <!-- MAIN OPERATIONAL GRID -->
             <main class="grid">
-                <!-- TIMELINE -->
+                <!-- DAILY ARCHITECTURE TIMELINE -->
                 <section class="card span-8">
                     <div class="card-header">
-                        <h2>⏱ DAILY ARCHITECTURE</h2>
+                        <h2>⏱ DAILY ARCHITECTURE TIMELINE</h2>
                         <div style="display:flex; gap:8px; align-items:center;">
-                            <button class="btn" style="padding:4px 8px; font-size:9px;" onclick="openTimelineModal()">🔍 EXPAND MODAL</button>
+                            <button class="btn btn-ghost" style="padding:4px 10px; font-size:9px;" onclick="openTimelineModal()">🔍 EXPAND</button>
                             <span class="badge" id="modeBadge">NORMAL</span>
                         </div>
                     </div>
@@ -114,12 +120,12 @@
                 <section class="card span-4">
                     <div class="card-header">
                         <h2>☑ MISSION CHECKLIST</h2>
-                        <span class="badge">BUILD</span>
+                        <span class="badge">BUILD TARGETS</span>
                     </div>
                     <div class="checklist" id="missionChecklist"></div>
                     <div class="progress-section">
                         <div class="progress-label">
-                            <span>Mission progress</span>
+                            <span>Mission Progress</span>
                             <span id="missionProgressText">0%</span>
                         </div>
                         <div class="progress">
@@ -128,13 +134,13 @@
                     </div>
                 </section>
 
-                <!-- TODAY'S DRAGON -->
-                <section class="card span-4">
+                <!-- TODAY'S DRAGON: ONE TARGET -->
+                <section class="card dragon-card span-4">
                     <div class="card-header">
                         <h2>🐉 TODAY'S DRAGON</h2>
-                        <span class="badge">ONE TARGET</span>
+                        <span class="badge" style="color:var(--yellow); border-color:rgba(245,158,11,0.3);">ONE TARGET</span>
                     </div>
-                    <input id="dragon" type="text" placeholder="What must be defeated today?" onchange="saveDayField('dragon', this.value)">
+                    <input id="dragon" type="text" placeholder="What single objective must be defeated today?" onchange="saveDayField('dragon', this.value)">
                     <p class="field-description">One meaningful outcome. Do not confuse activity with progress.</p>
                 </section>
 
@@ -142,9 +148,9 @@
                 <section class="card span-4">
                     <div class="card-header">
                         <h2>🧠 LEARNING GAP</h2>
-                        <span class="badge">TARGETED</span>
+                        <span class="badge">TARGETED KNOWLEDGE</span>
                     </div>
-                    <input id="learning" type="text" placeholder="What must I learn to build?" onchange="saveDayField('learning_gap', this.value)">
+                    <input id="learning" type="text" placeholder="What targeted skill must I learn to build today's feature?" onchange="saveDayField('learning_gap', this.value)">
                     <p class="field-description">Learn only what the current build requires.</p>
                 </section>
 
@@ -152,37 +158,37 @@
                 <section class="card span-4">
                     <div class="card-header">
                         <h2>🚀 SHIP / BUSINESS</h2>
-                        <span class="badge">LEVERAGE</span>
+                        <span class="badge">EXECUTION OUTPUT</span>
                     </div>
-                    <input id="ship" type="text" placeholder="What will exist by shutdown?" onchange="saveDayField('ship_target', this.value)">
+                    <input id="ship" type="text" placeholder="What tangible artifact will exist by shutdown?" onchange="saveDayField('ship_target', this.value)">
                     <p class="field-description">Build → Test → Ship → Learn.</p>
                 </section>
 
-                <!-- REFLECTION -->
+                <!-- SHUTDOWN REFLECTION -->
                 <section class="card span-8">
                     <div class="card-header">
                         <h2>📓 SHUTDOWN REFLECTION</h2>
                         <span class="badge">CLOSE LOOP</span>
                     </div>
-                    <textarea id="reflection" placeholder="What did I build? What worked? What didn't? What is the exact first action when I return?" onchange="saveDayField('reflection', this.value)"></textarea>
+                    <textarea id="reflection" placeholder="What did I build today? What worked? What didn't? What is the exact first starting action when I return?" onchange="saveDayField('reflection', this.value)"></textarea>
                 </section>
 
-                <!-- LIFE BLOCK -->
-                <section class="card span-4">
+                <!-- LIFE BLOCK: HUMAN PROTECTION LAYER -->
+                <section class="card life-card span-4">
                     <div class="card-header">
                         <h2>❤️ LIFE BLOCK</h2>
-                        <span class="badge">NON-WORK</span>
+                        <span class="badge" style="color:var(--green); border-color:rgba(16,185,129,0.3);">HUMAN PROTECTION</span>
                     </div>
                     <div class="checklist" id="lifeChecklist"></div>
                 </section>
 
-                <!-- LAWS -->
+                <!-- THE FIVE LAWS: SYSTEM DOCTRINE -->
                 <section class="card span-12">
                     <div class="card-header">
                         <h2>🧬 THE FIVE LAWS</h2>
                         <div style="display:flex; gap:8px; align-items:center;">
-                            <button class="btn" style="padding:4px 8px; font-size:9px;" onclick="openFiveLawsModal()">🔍 EXPAND LAWS MODAL</button>
-                            <span class="badge">SYSTEM</span>
+                            <button class="btn btn-ghost" style="padding:4px 10px; font-size:9px;" onclick="openFiveLawsModal()">🔍 EXPAND DOCTRINE</button>
+                            <span class="badge">SYSTEM DOCTRINE</span>
                         </div>
                     </div>
                     <div class="laws">
@@ -194,8 +200,8 @@
                     </div>
                 </section>
 
-                <!-- PHILOSOPHY -->
-                <section class="card span-12">
+                <!-- OPERATING PHILOSOPHY -->
+                <section class="card span-12" style="padding:0;">
                     <div class="quote">
                         <strong>THE DRAGON PRINCIPLE:</strong> The objective isn't to prove that you worked hard today.
                         The objective is to make something exist today that did not exist yesterday.
@@ -212,7 +218,7 @@
         ====================================================== -->
         <div id="view-dashboard" class="view-section">
             <main class="grid">
-                <!-- TODAY SUMMARY CARD -->
+                <!-- TODAY SUMMARY MODULE -->
                 <section class="card span-4">
                     <div class="card-header">
                         <h2>⚡ TODAY SUMMARY</h2>
@@ -253,18 +259,18 @@
                         <div class="progress"><div class="progress-fill" id="barTodayDeepWork" style="width:0%;"></div></div>
                     </div>
 
-                    <div style="display:grid; gap:6px; font-size:11px; margin-top:12px; color:var(--muted);">
-                        <div>Planned Capacity: <strong id="dashTodayPlanned" style="color:var(--text);">3h 45m</strong></div>
+                    <div style="display:grid; gap:8px; font-size:11px; margin-top:16px; color:var(--text-secondary);">
+                        <div>Planned Capacity: <strong id="dashTodayPlanned" style="color:var(--text-primary);">3h 45m</strong></div>
                         <div>Today's Dragon: <strong id="dashTodayDragon" style="color:var(--yellow);">-</strong></div>
                         <div>Active Project: <strong id="dashTodayProject" style="color:var(--cyan);">-</strong></div>
-                        <div>Active Build: <strong id="dashTodayBuild" style="color:var(--text);">-</strong></div>
+                        <div>Active Build: <strong id="dashTodayBuild" style="color:var(--text-primary);">-</strong></div>
                     </div>
                 </section>
 
-                <!-- THIS WEEK SUMMARY CARD -->
+                <!-- THIS WEEK SUMMARY MODULE -->
                 <section class="card span-4">
                     <div class="card-header">
-                        <h2>📅 THIS WEEK</h2>
+                        <h2>📅 THIS WEEK METRICS</h2>
                         <span class="badge">7 DAYS</span>
                     </div>
 
@@ -301,22 +307,22 @@
                     </div>
                 </section>
 
-                <!-- THIS MONTH SUMMARY CARD -->
+                <!-- THIS MONTH SUMMARY MODULE -->
                 <section class="card span-4">
                     <div class="card-header">
-                        <h2>🗓 THIS MONTH</h2>
+                        <h2>🗓 THIS MONTH METRICS</h2>
                         <span class="badge">30 DAYS</span>
                     </div>
 
                     <!-- CIRCULAR GAUGE FOR MONTH AVG COMPLETION -->
                     <div class="circle-progress-grid">
-                        <div class="circle-progress-container" style="width:105px; height:105px;">
-                            <svg class="circle-progress" viewBox="0 0 90 90" style="width:105px; height:105px;">
+                        <div class="circle-progress-container" style="width:100px; height:100px;">
+                            <svg class="circle-progress" viewBox="0 0 90 90" style="width:100px; height:100px;">
                                 <circle class="circle-bg" cx="45" cy="45" r="38"></circle>
                                 <circle class="circle-fill circle-fill-violet" id="ringMonthCompletion" cx="45" cy="45" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle>
                             </svg>
                             <div class="circle-text">
-                                <span id="ringMonthCompletionText" style="color:var(--violet); font-size:17px;">0%</span>
+                                <span id="ringMonthCompletionText" style="color:var(--violet); font-size:16px;">0%</span>
                                 <label>AVG DAILY</label>
                             </div>
                         </div>
@@ -372,7 +378,7 @@
                 <section class="card span-12">
                     <div class="card-header">
                         <h2>⚖️ SHIFT COMPARATIVE PERFORMANCE</h2>
-                        <span class="badge">EMPIRICAL DATA</span>
+                        <span class="badge">EMPIRICAL METRICS</span>
                     </div>
                     <p class="field-description" style="margin-bottom:20px;">
                         Let accumulated historical data reveal whether Normal Shift, Night Shift, or Recovery yields highest creative deep output.
@@ -405,9 +411,9 @@
                 <section class="card span-4">
                     <div class="card-header">
                         <h2>⏱ LOG DEEP WORK SESSION</h2>
-                        <span class="badge">ACTUAL TIME</span>
+                        <span class="badge">FOCUS TIME</span>
                     </div>
-                    <form onsubmit="logDeepWorkSession(event)" style="display:grid; gap:10px;">
+                    <form onsubmit="logDeepWorkSession(event)" style="display:grid; gap:12px;">
                         <input type="date" id="dwDate">
                         <div style="display:flex; gap:8px;">
                             <input type="time" id="dwStart" placeholder="Start Time">
@@ -417,7 +423,7 @@
                         <select id="dwProject"><option value="">-- Select Project --</option></select>
                         <select id="dwBuild"><option value="">-- Select Feature Build --</option></select>
                         <textarea id="dwDesc" placeholder="What was accomplished in this deep work session?" style="min-height:80px;"></textarea>
-                        <button type="submit" class="btn btn-primary">SAVE DEEP WORK</button>
+                        <button type="submit" class="btn btn-primary">SAVE DEEP WORK SESSION</button>
                     </form>
                 </section>
 
@@ -456,7 +462,7 @@
                         <h2>📦 CREATE PROJECT</h2>
                         <span class="badge">BUILD TARGET</span>
                     </div>
-                    <form onsubmit="createProject(event)" style="display:grid; gap:10px;">
+                    <form onsubmit="createProject(event)" style="display:grid; gap:12px;">
                         <input type="text" id="projectName" placeholder="Project Name (e.g. ANDUALEM 2.0 V2)">
                         <input type="text" id="projectDesc" placeholder="Description / Purpose">
                         <select id="projectStatus">
@@ -475,7 +481,7 @@
                         <h2>🔨 ADD FEATURE BUILD</h2>
                         <span class="badge">SHIPPING ITEM</span>
                     </div>
-                    <form onsubmit="createBuildFeature(event)" style="display:grid; gap:10px;">
+                    <form onsubmit="createBuildFeature(event)" style="display:grid; gap:12px;">
                         <select id="buildProject"><option value="">-- Select Project --</option></select>
                         <input type="text" id="buildFeatureName" placeholder="Feature Name (e.g. SQLite Persistence Backend)">
                         <select id="buildStatus">
@@ -492,7 +498,7 @@
 
                 <!-- PROJECTS CARDS GRID -->
                 <section class="span-12">
-                    <div style="font-size:14px; font-weight:800; margin-bottom:12px; color:var(--cyan);">ACTIVE PROJECTS</div>
+                    <div style="font-size:13px; font-weight:800; margin-bottom:12px; color:var(--cyan); letter-spacing:0.06em;">ACTIVE PROJECTS OVERVIEW</div>
                     <div class="grid" id="projectsGrid"></div>
                 </section>
 
@@ -530,13 +536,13 @@
                         <h2>🧠 LOG TARGETED LEARNING</h2>
                         <span class="badge">BUILD-TIED</span>
                     </div>
-                    <form onsubmit="logLearningSession(event)" style="display:grid; gap:10px;">
+                    <form onsubmit="logLearningSession(event)" style="display:grid; gap:12px;">
                         <input type="date" id="learnDate">
                         <input type="text" id="learnTopic" placeholder="Topic (e.g. Express REST API Design)">
                         <input type="text" id="learnPurpose" placeholder="Why learned / Knowledge gap">
                         <input type="number" id="learnDuration" placeholder="Duration (Minutes)">
                         <select id="learnProject"><option value="">-- Associated Project --</option></select>
-                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer; color:var(--text-secondary);">
                             <input type="checkbox" id="learnApplied" checked>
                             <span>Applied directly to a build feature?</span>
                         </label>
@@ -550,7 +556,7 @@
                         <h2>📜 TARGETED LEARNING LOG</h2>
                         <span class="badge" id="learnApplyRatio">0% Applied</span>
                     </div>
-                    <div style="font-size:12px; margin-bottom:12px;">Total Learning Time: <strong id="learnTotalHours" style="color:var(--cyan);">0 hrs</strong></div>
+                    <div style="font-size:11px; margin-bottom:12px; color:var(--text-secondary);">Total Learning Time: <strong id="learnTotalHours" style="color:var(--cyan);">0 hrs</strong></div>
                     <table class="cyber-table">
                         <thead>
                             <tr>
@@ -580,7 +586,7 @@
                         <h2>📜 HISTORICAL DAY RECORDS</h2>
                         <div style="display:flex; gap:10px;">
                             <select id="historyShiftFilter" onchange="renderHistoryView()">
-                                <option value="">All Shifts</option>
+                                <option value="">All Shift Types</option>
                                 <option value="normal">Normal Shift</option>
                                 <option value="night">Night Shift</option>
                                 <option value="recovery">Recovery</option>
@@ -609,9 +615,9 @@
                     <p class="field-description">
                         Export your longitudinal productivity data into a portable JSON backup file (e.g., ANDUALEM_2_0_BACKUP_YYYY-MM-DD.json).
                     </p>
-                    <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+                    <div style="display:flex; flex-direction:column; gap:12px; margin-top:16px;">
                         <button class="btn btn-primary" onclick="exportAllData()">💾 EXPORT ALL DATA</button>
-                        <label class="btn" style="text-align:center; cursor:pointer;">
+                        <label class="btn btn-secondary" style="text-align:center; cursor:pointer;">
                             📁 IMPORT BACKUP JSON
                             <input type="file" accept=".json" onchange="importBackupJSON(event)" style="display:none;">
                         </label>
@@ -626,7 +632,7 @@
                     <p class="field-description">
                         Detect and migrate existing localStorage tracking data into the SQLite / Cloudflare D1 relational database.
                     </p>
-                    <div style="font-size:12px; margin: 15px 0;" id="localStorageCount">Checking localStorage...</div>
+                    <div style="font-size:11px; margin: 16px 0; color:var(--text-secondary);" id="localStorageCount">Checking localStorage...</div>
                     <button class="btn btn-primary" onclick="migrateLocalStorageData()">MIGRATE EXISTING DATA</button>
                 </section>
 
@@ -635,11 +641,11 @@
                         <h2>⚙️ SYSTEM ARCHITECTURE INFO</h2>
                         <span class="badge">CLOUDFLARE READY</span>
                     </div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px;">
-                        <div>Local Engine: <strong>Node.js + Express (./server.js)</strong></div>
-                        <div>Production Engine: <strong>Cloudflare Workers (./src/worker.js)</strong></div>
-                        <div>Local Database: <strong>SQLite (./data/andualem.db)</strong></div>
-                        <div>Production Database: <strong>Cloudflare D1 (binding: DB)</strong></div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:11px; color:var(--text-secondary);">
+                        <div>Local Engine: <strong style="color:var(--text-primary);">Node.js + Express (./server.js)</strong></div>
+                        <div>Production Engine: <strong style="color:var(--text-primary);">Cloudflare Workers (./src/worker.js)</strong></div>
+                        <div>Local Database: <strong style="color:var(--text-primary);">SQLite (./data/andualem.db)</strong></div>
+                        <div>Production Database: <strong style="color:var(--text-primary);">Cloudflare D1 (binding: DB)</strong></div>
                     </div>
                 </section>
             </main>
@@ -652,7 +658,7 @@
     </div>
 
     <!-- ======================================================
-         MODAL WINDOW OVERLAYS (80% OPACITY DARK BACKDROP)
+         UNIFIED MODAL WINDOW OVERLAYS
     ====================================================== -->
 
     <!-- 1. TIMELINE MODAL -->
