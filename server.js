@@ -529,21 +529,23 @@ app.get('/api/dashboard/summary', async (req, res) => {
         // 1. TODAY METRICS
         const todayDay = await dbGet('SELECT * FROM days WHERE date = ?', [todayStr]) || { shift_type: 'normal', planned_capacity: '3h 45m' };
         const todayDeepWork = await dbGet('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM deep_work_sessions WHERE date = ?', [todayStr]);
+        const shiftMode = todayDay.shift_type || 'normal';
+
         const todayTasksCount = await dbGet(`
             SELECT COUNT(t.id) as total,
                    SUM(CASE WHEN l.completed = 1 THEN 1 ELSE 0 END) as done
             FROM tasks t
             LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = ?
-            WHERE t.active = 1
-        `, [todayStr]);
+            WHERE t.active = 1 AND (t.category = 'life' OR t.shift_type = ? OR t.shift_type = 'all')
+        `, [todayStr, shiftMode]);
 
         const todayMissionTasks = await dbGet(`
             SELECT COUNT(t.id) as total,
                    SUM(CASE WHEN l.completed = 1 THEN 1 ELSE 0 END) as done
             FROM tasks t
             LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = ?
-            WHERE t.active = 1 AND t.category = 'mission'
-        `, [todayStr]);
+            WHERE t.active = 1 AND t.category = 'mission' AND (t.shift_type = ? OR t.shift_type = 'all')
+        `, [todayStr, shiftMode]);
 
         // Active project & build
         const activeProject = await dbGet("SELECT * FROM projects WHERE status = 'ACTIVE' ORDER BY id DESC LIMIT 1");

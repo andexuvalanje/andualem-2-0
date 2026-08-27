@@ -70,13 +70,16 @@ const Charts = {
             // Value text above bar
             ctx.fillStyle = '#eef7ff';
             ctx.font = '10px Orbitron, sans-serif';
-            ctx.fillText(val, x + (barWidth / 2) - 8, y - 6);
+            ctx.textAlign = 'center';
+            ctx.fillText(val, x + (barWidth / 2), y - 6);
 
             // X label below
             ctx.fillStyle = '#748298';
             ctx.font = '9px Orbitron, sans-serif';
+            ctx.textAlign = 'center';
             const lText = labels[idx] || '';
-            ctx.fillText(lText, x + (barWidth / 2) - 14, height - padding + 16);
+            ctx.fillText(lText, x + (barWidth / 2), height - padding + 16);
+            ctx.textAlign = 'left';
         });
     },
 

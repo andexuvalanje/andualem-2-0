@@ -242,6 +242,38 @@ async function saveDayField(field, value) {
     toast();
 }
 
+async function submitDayTargets() {
+    const datePicker = document.getElementById("datePicker");
+    const date = datePicker && datePicker.value ? datePicker.value : todayString();
+    
+    const dragon = document.getElementById("dragon") ? document.getElementById("dragon").value : "";
+    const learning_gap = document.getElementById("learning") ? document.getElementById("learning").value : "";
+    const ship_target = document.getElementById("ship") ? document.getElementById("ship").value : "";
+    const reflection = document.getElementById("reflection") ? document.getElementById("reflection").value : "";
+
+    const payload = {
+        dragon,
+        learning_gap,
+        ship_target,
+        reflection
+    };
+
+    const res = await API.saveDay(date, payload);
+    if (res && res.success) {
+        if (currentDayData && currentDayData.day) {
+            Object.assign(currentDayData.day, payload);
+        }
+        const statusEl = document.getElementById("saveTargetsStatus");
+        if (statusEl) {
+            statusEl.style.display = "inline";
+            setTimeout(() => { statusEl.style.display = "none"; }, 3500);
+        }
+        toast("OBJECTIVES & REFLECTION SAVED TO DATABASE");
+    } else {
+        toast("ERROR SAVING TO DATABASE");
+    }
+}
+
 async function toggleTask(taskId, completed) {
     const date = document.getElementById("datePicker").value;
     await API.toggleTask(date, taskId, completed);

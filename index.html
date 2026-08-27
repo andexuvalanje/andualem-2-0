@@ -171,6 +171,12 @@
                         <span class="badge">CLOSE LOOP</span>
                     </div>
                     <textarea id="reflection" placeholder="What did I build today? What worked? What didn't? What is the exact first starting action when I return?" onchange="saveDayField('reflection', this.value)"></textarea>
+                    <div style="margin-top: 12px; display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                        <span id="saveTargetsStatus" style="font-size: 11px; color: var(--green); display: none; font-weight: 700;">✓ SAVED TO DATABASE</span>
+                        <button type="button" class="btn btn-primary" onclick="submitDayTargets()" style="padding: 8px 18px;">
+                            💾 SUBMIT OBJECTIVES & REFLECTION
+                        </button>
+                    </div>
                 </section>
 
                 <!-- LIFE BLOCK: HUMAN PROTECTION LAYER -->
