@@ -35,6 +35,125 @@ async function safeAll(stmt) {
     }
 }
 
+let schemaInitialized = false;
+
+async function ensureSchema(db) {
+    if (!db || schemaInitialized) return;
+    try {
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS days (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT UNIQUE NOT NULL,
+                shift_type TEXT NOT NULL DEFAULT 'normal',
+                planned_capacity TEXT DEFAULT '3h 45m',
+                dragon TEXT DEFAULT '',
+                learning_gap TEXT DEFAULT '',
+                ship_target TEXT DEFAULT '',
+                reflection TEXT DEFAULT '',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'mission',
+                shift_type TEXT DEFAULT 'all',
+                priority INTEGER DEFAULT 1,
+                active INTEGER DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS daily_task_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                task_id INTEGER NOT NULL,
+                completed INTEGER DEFAULT 0,
+                completed_at DATETIME,
+                UNIQUE(date, task_id),
+                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                completed_at DATETIME
+            );
+            CREATE TABLE IF NOT EXISTS builds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                feature_name TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PLANNED',
+                started_at DATETIME,
+                shipped_at DATETIME,
+                notes TEXT DEFAULT '',
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS deep_work_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                duration_minutes INTEGER NOT NULL,
+                project_id INTEGER,
+                build_id INTEGER,
+                description TEXT DEFAULT '',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE SET NULL,
+                FOREIGN KEY(build_id) REFERENCES builds(id) ON DELETE SET NULL
+            );
+            CREATE TABLE IF NOT EXISTS learning (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                purpose TEXT DEFAULT '',
+                duration_minutes INTEGER NOT NULL,
+                project_id INTEGER,
+                build_id INTEGER,
+                applied_to_build INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE SET NULL,
+                FOREIGN KEY(build_id) REFERENCES builds(id) ON DELETE SET NULL
+            );
+        `);
+
+        // Check if tasks need seeding
+        try {
+            const taskCount = await db.prepare("SELECT COUNT(*) as count FROM tasks").first();
+            if (!taskCount || taskCount.count === 0) {
+                await db.exec(`
+                    INSERT INTO tasks (task_name, category, shift_type, priority, active) VALUES
+                    ('Define ONE dragon for today.', 'mission', 'normal', 1, 1),
+                    ('Build a meaningful feature.', 'mission', 'normal', 2, 1),
+                    ('Learn only what the build requires.', 'mission', 'normal', 3, 1),
+                    ('Test and verify the work.', 'mission', 'normal', 4, 1),
+                    ('Ship or leave a reproducible next step.', 'mission', 'normal', 5, 1),
+                    ('Write the exact next starting action.', 'mission', 'normal', 6, 1),
+                    ('Define the dragon before 3:30 PM.', 'mission', 'night', 1, 1),
+                    ('Deep-build a major feature.', 'mission', 'night', 2, 1),
+                    ('Take a real food/recovery break.', 'mission', 'night', 3, 1),
+                    ('Study one targeted knowledge gap.', 'mission', 'night', 4, 1),
+                    ('Implement what was learned.', 'mission', 'night', 5, 1),
+                    ('Ship, test or validate.', 'mission', 'night', 6, 1),
+                    ('Write tomorrow''s first action.', 'mission', 'night', 7, 1),
+                    ('Sleep adequately.', 'mission', 'recovery', 1, 1),
+                    ('Eat and hydrate.', 'mission', 'recovery', 2, 1),
+                    ('Spend intentional family time.', 'mission', 'recovery', 3, 1),
+                    ('Get gentle movement if desired.', 'mission', 'recovery', 4, 1),
+                    ('Avoid guilt about reduced output.', 'mission', 'recovery', 5, 1),
+                    ('Prepare the next mission target.', 'mission', 'recovery', 6, 1),
+                    ('Protect family time.', 'life', 'all', 1, 1),
+                    ('Eat and hydrate.', 'life', 'all', 2, 1),
+                    ('Protect the sleep anchor.', 'life', 'all', 3, 1),
+                    ('Avoid unnecessary scrolling.', 'life', 'all', 4, 1);
+                `);
+            }
+        } catch (e) {}
+        schemaInitialized = true;
+    } catch (e) {
+        console.warn("Schema initialization notice:", e.message);
+    }
+}
+
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
@@ -53,18 +172,54 @@ export default {
             });
         }
 
+        // Support /public/... static asset references
+        if (pathname.startsWith('/public/')) {
+            if (env && env.ASSETS) {
+                const assetUrl = new URL(request.url);
+                assetUrl.pathname = pathname.replace(/^\/public/, '');
+                return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+            }
+        }
+
         // Only intercept /api/* endpoints; let assets serve frontend
         if (!pathname.startsWith('/api')) {
-            if (env.ASSETS) {
+            if (env && env.ASSETS) {
                 return env.ASSETS.fetch(request);
             }
             return new Response('Not Found', { status: 404 });
+        }
+
+        // Ensure database schema is automatically active on Cloudflare Workers
+        if (env && env.DB) {
+            await ensureSchema(env.DB);
         }
 
         try {
             // =========================================================
             // 1. DAYS ENDPOINTS
             // =========================================================
+            if ((pathname === '/api/days' || pathname === '/api/days/') && method === 'GET') {
+                const limit = parseInt(url.searchParams.get('limit') || '30');
+                const shift_type = url.searchParams.get('shift_type');
+
+                if (!env || !env.DB) {
+                    return jsonResponse({ success: true, days: [], fallback: true });
+                }
+
+                let sql = 'SELECT * FROM days';
+                let params = [];
+
+                if (shift_type) {
+                    sql += ' WHERE shift_type = ?';
+                    params.push(shift_type);
+                }
+                sql += ' ORDER BY date DESC LIMIT ?';
+                params.push(limit);
+
+                const days = await safeAll(env.DB.prepare(sql).bind(...params));
+                return jsonResponse({ success: true, days });
+            }
+
             if (pathname.startsWith('/api/days/')) {
                 const date = pathname.split('/api/days/')[1];
 
@@ -73,43 +228,58 @@ export default {
                 }
 
                 if (method === 'GET') {
-                    let day = await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(date).first();
+                    let day = null;
+                    if (env && env.DB) {
+                        try {
+                            day = await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(date).first();
+                        } catch (e) {}
 
-                    if (!day) {
-                        await env.DB.prepare(
-                            'INSERT INTO days (date, shift_type, planned_capacity) VALUES (?, ?, ?)'
-                        ).bind(date, 'normal', SHIFT_CAPACITIES.normal).run();
-                        day = await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(date).first();
+                        if (!day) {
+                            try {
+                                await env.DB.prepare(
+                                    'INSERT INTO days (date, shift_type, planned_capacity) VALUES (?, ?, ?)'
+                                ).bind(date, 'normal', SHIFT_CAPACITIES.normal).run();
+                            } catch (e) {}
+                            try {
+                                day = await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(date).first();
+                            } catch (e) {}
+                        }
                     }
 
-                    const tasks = await safeAll(env.DB.prepare(`
+                    const tasks = (env && env.DB) ? await safeAll(env.DB.prepare(`
                         SELECT t.id as task_id, t.task_name, t.category, t.shift_type, t.priority,
                                COALESCE(l.completed, 0) as completed, l.completed_at
                         FROM tasks t
                         LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = ?
                         WHERE t.active = 1
                         ORDER BY t.priority ASC
-                    `).bind(date));
+                    `).bind(date)) : [];
 
-                    const deepWork = await safeAll(env.DB.prepare(`
+                    const deepWork = (env && env.DB) ? await safeAll(env.DB.prepare(`
                         SELECT dw.*, p.name as project_name, b.feature_name
                         FROM deep_work_sessions dw
                         LEFT JOIN projects p ON dw.project_id = p.id
                         LEFT JOIN builds b ON dw.build_id = b.id
                         WHERE dw.date = ?
                         ORDER BY dw.created_at ASC
-                    `).bind(date));
+                    `).bind(date)) : [];
 
-                    const learning = await safeAll(env.DB.prepare(`
+                    const learning = (env && env.DB) ? await safeAll(env.DB.prepare(`
                         SELECT l.*, p.name as project_name, b.feature_name
                         FROM learning l
                         LEFT JOIN projects p ON l.project_id = p.id
                         LEFT JOIN builds b ON l.build_id = b.id
                         WHERE l.date = ?
                         ORDER BY l.created_at ASC
-                    `).bind(date));
+                    `).bind(date)) : [];
 
-                    return jsonResponse({ success: true, day: day || null, tasks, deepWork, learning });
+                    return jsonResponse({
+                        success: true,
+                        day: day || { date, shift_type: 'normal', planned_capacity: SHIFT_CAPACITIES.normal, dragon: '', learning_gap: '', ship_target: '', reflection: '' },
+                        tasks,
+                        deepWork,
+                        learning
+                    });
                 }
 
                 if (method === 'POST') {
@@ -141,24 +311,6 @@ export default {
                     const updated = await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(date).first();
                     return jsonResponse({ success: true, day: updated });
                 }
-            }
-
-            if (pathname === '/api/days' && method === 'GET') {
-                const limit = parseInt(url.searchParams.get('limit') || '30');
-                const shift_type = url.searchParams.get('shift_type');
-
-                let sql = 'SELECT * FROM days';
-                let params = [];
-
-                if (shift_type) {
-                    sql += ' WHERE shift_type = ?';
-                    params.push(shift_type);
-                }
-                sql += ' ORDER BY date DESC LIMIT ?';
-                params.push(limit);
-
-                const days = await safeAll(env.DB.prepare(sql).bind(...params));
-                return jsonResponse({ success: true, days });
             }
 
             if (pathname.startsWith('/api/reset-day/') && method === 'POST') {

@@ -9,6 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Capacity map helper
 const SHIFT_CAPACITIES = {
@@ -26,6 +27,28 @@ function isValidDate(dateStr) {
 // DAYS ENDPOINTS
 // =========================================================
 
+// GET /api/days - Get list of historical days (defined before :date route)
+app.get('/api/days', async (req, res) => {
+    try {
+        const { limit = 30, shift_type } = req.query;
+        let sql = 'SELECT * FROM days';
+        const params = [];
+
+        if (shift_type) {
+            sql += ' WHERE shift_type = ?';
+            params.push(shift_type);
+        }
+        sql += ' ORDER BY date DESC LIMIT ?';
+        params.push(parseInt(limit));
+
+        const days = await dbAll(sql, params);
+        res.json({ success: true, days: days || [] });
+    } catch (err) {
+        console.error("Error fetching days history:", err);
+        res.status(500).json({ success: false, error: err.message, days: [] });
+    }
+});
+
 // GET /api/days/:date - Retrieve or auto-create a day record
 app.get('/api/days/:date', async (req, res) => {
     try {
@@ -34,50 +57,76 @@ app.get('/api/days/:date', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid date format. Expected YYYY-MM-DD' });
         }
 
-        let day = await dbGet('SELECT * FROM days WHERE date = ?', [date]);
+        let day;
+        try {
+            day = await dbGet('SELECT * FROM days WHERE date = ?', [date]);
+        } catch (dbErr) {
+            console.error("DB error selecting day:", dbErr);
+        }
 
         if (!day) {
-            // Auto-create day with default normal shift
-            await dbRun(
-                'INSERT INTO days (date, shift_type, planned_capacity) VALUES (?, ?, ?)',
-                [date, 'normal', SHIFT_CAPACITIES.normal]
-            );
-            day = await dbGet('SELECT * FROM days WHERE date = ?', [date]);
+            try {
+                // Auto-create day with default normal shift
+                await dbRun(
+                    'INSERT INTO days (date, shift_type, planned_capacity) VALUES (?, ?, ?)',
+                    [date, 'normal', SHIFT_CAPACITIES.normal]
+                );
+            } catch (insertErr) {
+                console.warn("Auto-create day notice (possible constraint/race):", insertErr.message);
+            }
+            try {
+                day = await dbGet('SELECT * FROM days WHERE date = ?', [date]);
+            } catch (e) {}
         }
 
         // Get tasks log for this day
-        const tasks = await dbAll(`
-            SELECT t.id as task_id, t.task_name, t.category, t.shift_type, t.priority,
-                   COALESCE(l.completed, 0) as completed, l.completed_at
-            FROM tasks t
-            LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = ?
-            WHERE t.active = 1
-            ORDER BY t.priority ASC
-        `, [date]);
+        let tasks = [];
+        try {
+            tasks = await dbAll(`
+                SELECT t.id as task_id, t.task_name, t.category, t.shift_type, t.priority,
+                       COALESCE(l.completed, 0) as completed, l.completed_at
+                FROM tasks t
+                LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = ?
+                WHERE t.active = 1
+                ORDER BY t.priority ASC
+            `, [date]);
+        } catch (err) {
+            console.error("Error fetching tasks for day:", err);
+        }
 
         // Get deep work sessions for this day
-        const deepWork = await dbAll(`
-            SELECT dw.*, p.name as project_name, b.feature_name
-            FROM deep_work_sessions dw
-            LEFT JOIN projects p ON dw.project_id = p.id
-            LEFT JOIN builds b ON dw.build_id = b.id
-            WHERE dw.date = ?
-            ORDER BY dw.created_at ASC
-        `, [date]);
+        let deepWork = [];
+        try {
+            deepWork = await dbAll(`
+                SELECT dw.*, p.name as project_name, b.feature_name
+                FROM deep_work_sessions dw
+                LEFT JOIN projects p ON dw.project_id = p.id
+                LEFT JOIN builds b ON dw.build_id = b.id
+                WHERE dw.date = ?
+                ORDER BY dw.created_at ASC
+            `, [date]);
+        } catch (err) {
+            console.error("Error fetching deep work for day:", err);
+        }
 
         // Get learning sessions for this day
-        const learning = await dbAll(`
-            SELECT l.*, p.name as project_name, b.feature_name
-            FROM learning l
-            LEFT JOIN projects p ON l.project_id = p.id
-            LEFT JOIN builds b ON l.build_id = b.id
-            WHERE l.date = ?
-            ORDER BY l.created_at ASC
-        `, [date]);
+        let learning = [];
+        try {
+            learning = await dbAll(`
+                SELECT l.*, p.name as project_name, b.feature_name
+                FROM learning l
+                LEFT JOIN projects p ON l.project_id = p.id
+                LEFT JOIN builds b ON l.build_id = b.id
+                WHERE l.date = ?
+                ORDER BY l.created_at ASC
+            `, [date]);
+        } catch (err) {
+            console.error("Error fetching learning for day:", err);
+        }
 
         res.json({
             success: true,
-            day: day || null,
+            day: day || { date, shift_type: 'normal', planned_capacity: SHIFT_CAPACITIES.normal, dragon: '', learning_gap: '', ship_target: '', reflection: '' },
             tasks: tasks || [],
             deepWork: deepWork || [],
             learning: learning || []
@@ -126,26 +175,7 @@ app.post('/api/days/:date', async (req, res) => {
     }
 });
 
-// GET /api/days - Get list of historical days
-app.get('/api/days', async (req, res) => {
-    try {
-        const { limit = 30, shift_type } = req.query;
-        let sql = 'SELECT * FROM days';
-        const params = [];
 
-        if (shift_type) {
-            sql += ' WHERE shift_type = ?';
-            params.push(shift_type);
-        }
-        sql += ' ORDER BY date DESC LIMIT ?';
-        params.push(parseInt(limit));
-
-        const days = await dbAll(sql, params);
-        res.json({ success: true, days: days || [] });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
 
 // POST /api/reset-day/:date - Reset a specific day
 app.post('/api/reset-day/:date', async (req, res) => {
