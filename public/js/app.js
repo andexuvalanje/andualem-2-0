@@ -101,16 +101,24 @@ function setView(viewName) {
 // 1. TODAY VIEW
 // =========================================================
 
-async function renderToday() {
+async function renderToday(fetchFromApi = true) {
     const datePicker = document.getElementById("datePicker");
     if (!datePicker.value) datePicker.value = todayString();
     const date = datePicker.value;
 
-    const res = await API.getDay(date);
-    if (!res.success) return;
-    currentDayData = res;
+    if (fetchFromApi || !currentDayData) {
+        const res = await API.getDay(date);
+        if (res && res.success) {
+            if (currentDayData && currentDayData.day && currentDayData.day.shift_type && res.day) {
+                res.day.shift_type = currentDayData.day.shift_type;
+            }
+            currentDayData = res;
+        }
+    }
 
-    const day = res.day;
+    if (!currentDayData) return;
+
+    const day = currentDayData.day || { date, shift_type: 'normal', planned_capacity: '3h 45m' };
     const modeKey = day.shift_type || 'normal';
     const modeConfig = MODES[modeKey] || MODES.normal;
 
@@ -135,61 +143,96 @@ async function renderToday() {
 
     // Timeline
     const timelineEl = document.getElementById("timeline");
-    timelineEl.innerHTML = modeConfig.timeline.map((item, idx) => `
-        <div class="timeline-item">
-            <div class="timeline-time">${item[0]}</div>
-            <div>
-                <div class="timeline-title">${item[1]}</div>
-                <span class="timeline-description">${item[2]}</span>
+    if (timelineEl) {
+        timelineEl.innerHTML = modeConfig.timeline.map((item, idx) => `
+            <div class="timeline-item">
+                <div class="timeline-time">${item[0]}</div>
+                <div>
+                    <div class="timeline-title">${item[1]}</div>
+                    <span class="timeline-description">${item[2]}</span>
+                </div>
+                <span class="badge">${idx < 3 ? "CORE" : "BLOCK"}</span>
             </div>
-            <span class="badge">${idx < 3 ? "CORE" : "BLOCK"}</span>
-        </div>
-    `).join("");
+        `).join("");
+    }
+
+    const tasks = (currentDayData.tasks && currentDayData.tasks.length > 0) ? currentDayData.tasks : [];
 
     // Mission Checklist
-    const missionTasks = res.tasks.filter(t => t.category === 'mission' && (t.shift_type === modeKey || t.shift_type === 'all'));
+    const missionTasks = tasks.filter(t => t.category === 'mission' && (t.shift_type === modeKey || t.shift_type === 'all'));
     const missionEl = document.getElementById("missionChecklist");
-    missionEl.innerHTML = missionTasks.map(t => `
-        <label class="task ${t.completed ? 'done' : ''}">
-            <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTask(${t.task_id}, this.checked)">
-            <span>${t.task_name}</span>
-        </label>
-    `).join("");
+    if (missionEl) {
+        missionEl.innerHTML = missionTasks.map(t => `
+            <label class="task ${t.completed ? 'done' : ''}">
+                <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTask(${t.task_id}, this.checked)">
+                <span>${t.task_name}</span>
+            </label>
+        `).join("");
+    }
 
     // Life Checklist
-    const lifeTasks = res.tasks.filter(t => t.category === 'life');
+    const lifeTasks = tasks.filter(t => t.category === 'life');
     const lifeEl = document.getElementById("lifeChecklist");
-    lifeEl.innerHTML = lifeTasks.map(t => `
-        <label class="task ${t.completed ? 'done' : ''}">
-            <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTask(${t.task_id}, this.checked)">
-            <span>${t.task_name}</span>
-        </label>
-    `).join("");
+    if (lifeEl) {
+        lifeEl.innerHTML = lifeTasks.map(t => `
+            <label class="task ${t.completed ? 'done' : ''}">
+                <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTask(${t.task_id}, this.checked)">
+                <span>${t.task_name}</span>
+            </label>
+        `).join("");
+    }
 
     // Progress Calculations
     const missionTotal = missionTasks.length;
     const missionDone = missionTasks.filter(t => t.completed).length;
     const missionPct = missionTotal ? Math.round((missionDone / missionTotal) * 100) : 0;
 
-    document.getElementById("missionProgress").style.width = missionPct + "%";
-    document.getElementById("missionProgressText").textContent = missionPct + "%";
+    const mProg = document.getElementById("missionProgress");
+    if (mProg) mProg.style.width = missionPct + "%";
+    const mProgText = document.getElementById("missionProgressText");
+    if (mProgText) mProgText.textContent = missionPct + "%";
 
-    const totalTasks = res.tasks.length;
-    const totalDone = res.tasks.filter(t => t.completed).length;
+    const totalTasks = tasks.length;
+    const totalDone = tasks.filter(t => t.completed).length;
     const dailyPct = totalTasks ? Math.round((totalDone / totalTasks) * 100) : 0;
 
-    document.getElementById("dailyProgress").style.width = dailyPct + "%";
-    document.getElementById("dailyProgressText").textContent = dailyPct + "%";
-    document.getElementById("completionStat").textContent = dailyPct + "%";
+    const dProg = document.getElementById("dailyProgress");
+    if (dProg) dProg.style.width = dailyPct + "%";
+    const dProgText = document.getElementById("dailyProgressText");
+    if (dProgText) dProgText.textContent = dailyPct + "%";
+    const compStat = document.getElementById("completionStat");
+    if (compStat) compStat.textContent = dailyPct + "%";
 
     // Populate dropdowns for quick deep work & learning loggers on Today view
     populateProjectDropdowns();
 }
 
 async function changeMode(mode) {
-    const date = document.getElementById("datePicker").value;
-    await API.saveDay(date, { shift_type: mode, planned_capacity: MODES[mode].capacity });
-    renderToday();
+    const datePicker = document.getElementById("datePicker");
+    if (!datePicker.value) datePicker.value = todayString();
+    const date = datePicker.value;
+
+    const capacity = MODES[mode] ? MODES[mode].capacity : '3h 45m';
+
+    if (!currentDayData) {
+        currentDayData = { day: { date, shift_type: mode, planned_capacity: capacity }, tasks: [], deepWork: [], learning: [] };
+    } else {
+        if (!currentDayData.day) currentDayData.day = { date, shift_type: mode, planned_capacity: capacity };
+        else {
+            currentDayData.day.shift_type = mode;
+            currentDayData.day.planned_capacity = capacity;
+        }
+    }
+
+    // Immediately re-render UI optimistically
+    renderToday(false);
+
+    // Save to API & LocalStorage
+    const res = await API.saveDay(date, { shift_type: mode, planned_capacity: capacity });
+    if (res && res.day) {
+        currentDayData.day = { ...currentDayData.day, ...res.day };
+        renderToday(false);
+    }
     toast(`SHIFT SWITCHED TO ${mode.toUpperCase()}`);
 }
 

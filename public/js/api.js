@@ -51,6 +51,39 @@ function saveLocalDay(date, data) {
     }
 }
 
+const DEFAULT_TASKS = [
+    // Mission - Normal Shift
+    { task_id: 1, task_name: "Define ONE dragon for today.", category: "mission", shift_type: "normal", priority: 1, completed: 0, completed_at: null },
+    { task_id: 2, task_name: "Build a meaningful feature.", category: "mission", shift_type: "normal", priority: 2, completed: 0, completed_at: null },
+    { task_id: 3, task_name: "Learn only what the build requires.", category: "mission", shift_type: "normal", priority: 3, completed: 0, completed_at: null },
+    { task_id: 4, task_name: "Test and verify the work.", category: "mission", shift_type: "normal", priority: 4, completed: 0, completed_at: null },
+    { task_id: 5, task_name: "Ship or leave a reproducible next step.", category: "mission", shift_type: "normal", priority: 5, completed: 0, completed_at: null },
+    { task_id: 6, task_name: "Write the exact next starting action.", category: "mission", shift_type: "normal", priority: 6, completed: 0, completed_at: null },
+
+    // Mission - Night Shift
+    { task_id: 7, task_name: "Define the dragon before 3:30 PM.", category: "mission", shift_type: "night", priority: 1, completed: 0, completed_at: null },
+    { task_id: 8, task_name: "Deep-build a major feature.", category: "mission", shift_type: "night", priority: 2, completed: 0, completed_at: null },
+    { task_id: 9, task_name: "Take a real food/recovery break.", category: "mission", shift_type: "night", priority: 3, completed: 0, completed_at: null },
+    { task_id: 10, task_name: "Study one targeted knowledge gap.", category: "mission", shift_type: "night", priority: 4, completed: 0, completed_at: null },
+    { task_id: 11, task_name: "Implement what was learned.", category: "mission", shift_type: "night", priority: 5, completed: 0, completed_at: null },
+    { task_id: 12, task_name: "Ship, test or validate.", category: "mission", shift_type: "night", priority: 6, completed: 0, completed_at: null },
+    { task_id: 13, task_name: "Write tomorrow's first action.", category: "mission", shift_type: "night", priority: 7, completed: 0, completed_at: null },
+
+    // Mission - Recovery Shift
+    { task_id: 14, task_name: "Sleep adequately.", category: "mission", shift_type: "recovery", priority: 1, completed: 0, completed_at: null },
+    { task_id: 15, task_name: "Eat and hydrate.", category: "mission", shift_type: "recovery", priority: 2, completed: 0, completed_at: null },
+    { task_id: 16, task_name: "Spend intentional family time.", category: "mission", shift_type: "recovery", priority: 3, completed: 0, completed_at: null },
+    { task_id: 17, task_name: "Get gentle movement if desired.", category: "mission", shift_type: "recovery", priority: 4, completed: 0, completed_at: null },
+    { task_id: 18, task_name: "Avoid guilt about reduced output.", category: "mission", shift_type: "recovery", priority: 5, completed: 0, completed_at: null },
+    { task_id: 19, task_name: "Prepare the next mission target.", category: "mission", shift_type: "recovery", priority: 6, completed: 0, completed_at: null },
+
+    // Life Checklist
+    { task_id: 20, task_name: "Protect family time.", category: "life", shift_type: "all", priority: 1, completed: 0, completed_at: null },
+    { task_id: 21, task_name: "Eat and hydrate.", category: "life", shift_type: "all", priority: 2, completed: 0, completed_at: null },
+    { task_id: 22, task_name: "Protect the sleep anchor.", category: "life", shift_type: "all", priority: 3, completed: 0, completed_at: null },
+    { task_id: 23, task_name: "Avoid unnecessary scrolling.", category: "life", shift_type: "all", priority: 4, completed: 0, completed_at: null }
+];
+
 const API = {
     // DAYS
     async getDay(date) {
@@ -58,17 +91,27 @@ const API = {
             return { success: false, error: 'Invalid date format' };
         }
         const res = await request(`${API_BASE}/days/${date}`);
-        if (res.success) return res;
-
-        // Offline / Fallback mode
         const local = getLocalDay(date) || { date, shift_type: 'normal', planned_capacity: '3h 45m', dragon: '', learning_gap: '', ship_target: '', reflection: '' };
+        
+        let tasks = DEFAULT_TASKS;
+        let day = local;
+        let deepWork = [];
+        let learning = [];
+
+        if (res.success) {
+            if (res.day) day = { ...local, ...res.day };
+            if (Array.isArray(res.tasks) && res.tasks.length > 0) tasks = res.tasks;
+            if (Array.isArray(res.deepWork)) deepWork = res.deepWork;
+            if (Array.isArray(res.learning)) learning = res.learning;
+        }
+
         return {
             success: true,
-            fallback: true,
-            day: local,
-            tasks: [],
-            deepWork: [],
-            learning: []
+            fallback: !res.success,
+            day,
+            tasks,
+            deepWork,
+            learning
         };
     },
 
