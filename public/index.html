@@ -60,7 +60,7 @@
                         <h2 id="dateTitle">OPERATING STATUS — TODAY</h2>
                         <div class="field-description">Ethiopian clock · Local SQLite persistence · Offline-First Engine</div>
                     </div>
-                    <input id="datePicker" class="date-input" type="date" onchange="renderToday()">
+                    <input id="datePicker" class="date-input" type="date" onchange="onDateChanged()">
                 </div>
 
                 <!-- MODE SWITCHER TABS -->
@@ -426,7 +426,7 @@
                             <input type="time" id="dwEnd" placeholder="End Time">
                         </div>
                         <input type="number" id="dwDuration" placeholder="Duration (Minutes)">
-                        <select id="dwProject"><option value="">-- Select Project --</option></select>
+                        <select id="dwProject" onchange="updateBuildOptions('dwProject', 'dwBuild')"><option value="">-- Select Project --</option></select>
                         <select id="dwBuild"><option value="">-- Select Feature Build --</option></select>
                         <textarea id="dwDesc" placeholder="What was accomplished in this deep work session?" style="min-height:80px;"></textarea>
                         <button type="submit" class="btn btn-primary">SAVE DEEP WORK SESSION</button>
@@ -547,7 +547,8 @@
                         <input type="text" id="learnTopic" placeholder="Topic (e.g. Express REST API Design)">
                         <input type="text" id="learnPurpose" placeholder="Why learned / Knowledge gap">
                         <input type="number" id="learnDuration" placeholder="Duration (Minutes)">
-                        <select id="learnProject"><option value="">-- Associated Project --</option></select>
+                        <select id="learnProject" onchange="updateBuildOptions('learnProject', 'learnBuild')"><option value="">-- Associated Project --</option></select>
+                        <select id="learnBuild"><option value="">-- Associated Feature Build --</option></select>
                         <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer; color:var(--text-secondary);">
                             <input type="checkbox" id="learnApplied" checked>
                             <span>Applied directly to a build feature?</span>

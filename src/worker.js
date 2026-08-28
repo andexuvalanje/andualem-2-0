@@ -154,6 +154,16 @@ async function ensureSchema(db) {
     }
 }
 
+async function ensureDayRecord(db, date) {
+    if (!db || !date || !isValidDate(date)) return;
+    try {
+        await db.prepare(`
+            INSERT OR IGNORE INTO days (date, shift_type, planned_capacity)
+            VALUES (?, 'normal', '3h 45m')
+        `).bind(date).run();
+    } catch (e) {}
+}
+
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
@@ -346,6 +356,7 @@ export default {
             // =========================================================
             if (pathname === '/api/daily-task-log/toggle' && method === 'POST') {
                 const { date, task_id, completed } = await request.json();
+                await ensureDayRecord(env.DB, date);
                 const now = completed ? new Date().toISOString() : null;
 
                 const existing = await env.DB.prepare('SELECT id FROM daily_task_log WHERE date = ? AND task_id = ?').bind(date, task_id).first();
@@ -527,6 +538,7 @@ export default {
                 if (method === 'POST') {
                     const { date, start_time, end_time, duration_minutes, project_id, build_id, description } = await request.json();
                     if (!date || !duration_minutes) return jsonResponse({ success: false, error: 'Date and duration required' }, 400);
+                    await ensureDayRecord(env.DB, date);
 
                     const res = await env.DB.prepare(`
                         INSERT INTO deep_work_sessions (date, start_time, end_time, duration_minutes, project_id, build_id, description)
@@ -581,6 +593,7 @@ export default {
                 if (method === 'POST') {
                     const { date, topic, purpose, duration_minutes, project_id, build_id, applied_to_build } = await request.json();
                     if (!date || !topic || !duration_minutes) return jsonResponse({ success: false, error: 'Date, topic and duration required' }, 400);
+                    await ensureDayRecord(env.DB, date);
 
                     const res = await env.DB.prepare(`
                         INSERT INTO learning (date, topic, purpose, duration_minutes, project_id, build_id, applied_to_build)
@@ -610,6 +623,7 @@ export default {
             // =========================================================
             if (pathname === '/api/dashboard/summary' && method === 'GET') {
                 const todayStr = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
+                await ensureDayRecord(env.DB, todayStr);
 
                 const todayDay = (await env.DB.prepare('SELECT * FROM days WHERE date = ?').bind(todayStr).first()) || { shift_type: 'normal', planned_capacity: '3h 45m' };
                 const shiftMode = todayDay.shift_type || 'normal';
@@ -635,24 +649,27 @@ export default {
 
                 const weekDeepWork = (await env.DB.prepare('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM deep_work_sessions WHERE date >= date(?, "-6 days")').bind(todayStr).first()) || { total: 0 };
                 const weekLearning = (await env.DB.prepare('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM learning WHERE date >= date(?, "-6 days")').bind(todayStr).first()) || { total: 0 };
-                const weekShippedFeatures = (await env.DB.prepare("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND date(shipped_at) >= date(?, '-6 days')").bind(todayStr).first()) || { total: 0 };
+                const weekShippedFeatures = (await env.DB.prepare("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL AND substr(shipped_at, 1, 10) >= date(?, '-6 days')").bind(todayStr).first()) || { total: 0 };
                 const weekTasksDone = (await env.DB.prepare("SELECT COUNT(*) as total FROM daily_task_log WHERE completed = 1 AND date >= date(?, '-6 days')").bind(todayStr).first()) || { total: 0 };
 
                 const monthDeepWork = (await env.DB.prepare('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM deep_work_sessions WHERE date >= date(?, "-29 days")').bind(todayStr).first()) || { total: 0 };
-                const monthShippedFeatures = (await env.DB.prepare("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND date(shipped_at) >= date(?, '-29 days')").bind(todayStr).first()) || { total: 0 };
+                const monthShippedFeatures = (await env.DB.prepare("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL AND substr(shipped_at, 1, 10) >= date(?, '-29 days')").bind(todayStr).first()) || { total: 0 };
                 const monthLearningSessions = (await env.DB.prepare('SELECT COUNT(*) as total FROM learning WHERE date >= date(?, "-29 days")').bind(todayStr).first()) || { total: 0 };
 
                 const monthCompletionAvg = (await env.DB.prepare(`
                     SELECT AVG(completion_rate) as avg_rate FROM (
                         SELECT d.date,
                                (CAST(SUM(CASE WHEN l.completed = 1 AND (t.category = 'life' OR t.shift_type = d.shift_type OR t.shift_type = 'all') THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(COUNT(CASE WHEN (t.category = 'life' OR t.shift_type = d.shift_type OR t.shift_type = 'all') THEN 1 END), 0)) * 100 as completion_rate
-                        FROM days d
+                        FROM (
+                            SELECT date, shift_type FROM days WHERE date >= date(?, '-29 days')
+                            UNION
+                            SELECT DISTINCT date, 'normal' as shift_type FROM daily_task_log WHERE date >= date(?, '-29 days') AND date NOT IN (SELECT date FROM days)
+                        ) d
                         JOIN tasks t ON t.active = 1
                         LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = d.date
-                        WHERE d.date >= date(?, '-29 days')
                         GROUP BY d.date
                     )
-                `).bind(todayStr).first()) || { avg_rate: 0 };
+                `).bind(todayStr, todayStr).first()) || { avg_rate: 0 };
 
                 return jsonResponse({
                     success: true,
@@ -663,8 +680,8 @@ export default {
                         deep_work_minutes: todayDeepWork.total,
                         total_tasks: todayTasksCount.total || 0,
                         done_tasks: todayTasksCount.done || 0,
-                        daily_completion_percent: todayTasksCount.total ? Math.round((todayTasksCount.done / todayTasksCount.total) * 100) : 0,
-                        mission_completion_percent: todayMissionTasks.total ? Math.round((todayMissionTasks.done / todayMissionTasks.total) * 100) : 0,
+                        daily_completion_percent: todayTasksCount.total ? Math.round(((todayTasksCount.done || 0) / todayTasksCount.total) * 100) : 0,
+                        mission_completion_percent: todayMissionTasks.total ? Math.round(((todayMissionTasks.done || 0) / todayMissionTasks.total) * 100) : 0,
                         active_project: activeProject ? activeProject.name : 'None',
                         active_build: activeBuild ? `${activeBuild.feature_name} (${activeBuild.status})` : 'None'
                     },
@@ -685,26 +702,27 @@ export default {
 
             if (pathname === '/api/dashboard/trends' && method === 'GET') {
                 const deepWorkMonthly = await safeAll(env.DB.prepare(`
-                    SELECT strftime('%Y-%m', date) as month,
+                    SELECT substr(date, 1, 7) as month,
                            ROUND(SUM(duration_minutes) / 60.0, 1) as hours
                     FROM deep_work_sessions
+                    WHERE date IS NOT NULL AND date != ''
                     GROUP BY month
                     ORDER BY month ASC
                     LIMIT 12
                 `));
 
                 const shippedMonthly = await safeAll(env.DB.prepare(`
-                    SELECT strftime('%Y-%m', shipped_at) as month,
+                    SELECT substr(shipped_at, 1, 7) as month,
                            COUNT(*) as shipped_count
                     FROM builds
-                    WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL
+                    WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL AND shipped_at != ''
                     GROUP BY month
                     ORDER BY month ASC
                     LIMIT 12
                 `));
 
                 const missionCompletionMonthly = await safeAll(env.DB.prepare(`
-                    SELECT strftime('%Y-%m', d.date) as month,
+                    SELECT substr(d.date, 1, 7) as month,
                            ROUND(AVG(
                                CAST(
                                    (SELECT COUNT(*) FROM daily_task_log l JOIN tasks t ON l.task_id = t.id WHERE l.date = d.date AND l.completed = 1 AND t.category = 'mission' AND (t.shift_type = d.shift_type OR t.shift_type = 'all')) AS FLOAT
@@ -713,6 +731,7 @@ export default {
                                ) * 100
                            ), 0) as mission_percent
                     FROM days d
+                    WHERE d.date IS NOT NULL AND d.date != ''
                     GROUP BY month
                     ORDER BY month ASC
                     LIMIT 12
@@ -753,8 +772,8 @@ export default {
                 const shippedByShift = await safeAll(env.DB.prepare(`
                     SELECT d.shift_type, COUNT(b.id) as shipped_count
                     FROM builds b
-                    JOIN days d ON date(b.shipped_at) = d.date
-                    WHERE b.status = 'SHIPPED'
+                    JOIN days d ON substr(b.shipped_at, 1, 10) = d.date
+                    WHERE b.status = 'SHIPPED' AND b.shipped_at IS NOT NULL
                     GROUP BY d.shift_type
                 `));
 

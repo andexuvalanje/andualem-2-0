@@ -23,6 +23,16 @@ function isValidDate(dateStr) {
     return typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
 }
 
+async function ensureDayRecord(date) {
+    if (!date || !isValidDate(date)) return;
+    try {
+        await dbRun(`
+            INSERT OR IGNORE INTO days (date, shift_type, planned_capacity)
+            VALUES (?, 'normal', '3h 45m')
+        `, [date]);
+    } catch (e) {}
+}
+
 // =========================================================
 // DAYS ENDPOINTS
 // =========================================================
@@ -218,6 +228,7 @@ app.post('/api/reset-day/:date', async (req, res) => {
 app.post('/api/daily-task-log/toggle', async (req, res) => {
     try {
         const { date, task_id, completed } = req.body;
+        await ensureDayRecord(date);
         const now = completed ? new Date().toISOString() : null;
 
         const existing = await dbGet('SELECT id FROM daily_task_log WHERE date = ? AND task_id = ?', [date, task_id]);
@@ -431,6 +442,7 @@ app.post('/api/deep-work', async (req, res) => {
         if (!date || !duration_minutes) {
             return res.status(400).json({ success: false, error: 'Date and duration are required' });
         }
+        await ensureDayRecord(date);
 
         const result = await dbRun(`
             INSERT INTO deep_work_sessions (date, start_time, end_time, duration_minutes, project_id, build_id, description)
@@ -496,6 +508,7 @@ app.post('/api/learning', async (req, res) => {
         if (!date || !topic || !duration_minutes) {
             return res.status(400).json({ success: false, error: 'Date, topic and duration are required' });
         }
+        await ensureDayRecord(date);
 
         const result = await dbRun(`
             INSERT INTO learning (date, topic, purpose, duration_minutes, project_id, build_id, applied_to_build)
@@ -533,6 +546,7 @@ app.delete('/api/learning/:id', async (req, res) => {
 app.get('/api/dashboard/summary', async (req, res) => {
     try {
         const todayStr = req.query.date || new Date().toISOString().split('T')[0];
+        await ensureDayRecord(todayStr);
 
         // 1. TODAY METRICS
         const todayDay = await dbGet('SELECT * FROM days WHERE date = ?', [todayStr]) || { shift_type: 'normal', planned_capacity: '3h 45m' };
@@ -562,7 +576,7 @@ app.get('/api/dashboard/summary', async (req, res) => {
         // 2. THIS WEEK METRICS (Last 7 Days)
         const weekDeepWork = await dbGet('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM deep_work_sessions WHERE date >= date(?, "-6 days")', [todayStr]);
         const weekLearning = await dbGet('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM learning WHERE date >= date(?, "-6 days")', [todayStr]);
-        const weekShippedFeatures = await dbGet("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND date(shipped_at) >= date(?, '-6 days')", [todayStr]);
+        const weekShippedFeatures = await dbGet("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL AND substr(shipped_at, 1, 10) >= date(?, '-6 days')", [todayStr]);
         const weekTasksDone = await dbGet("SELECT COUNT(*) as total FROM daily_task_log WHERE completed = 1 AND date >= date(?, '-6 days')", [todayStr]);
 
         // Week Shift Output comparison
@@ -578,20 +592,23 @@ app.get('/api/dashboard/summary', async (req, res) => {
 
         // 3. THIS MONTH METRICS (Last 30 Days)
         const monthDeepWork = await dbGet('SELECT COALESCE(SUM(duration_minutes), 0) as total FROM deep_work_sessions WHERE date >= date(?, "-29 days")', [todayStr]);
-        const monthShippedFeatures = await dbGet("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND date(shipped_at) >= date(?, '-29 days')", [todayStr]);
+        const monthShippedFeatures = await dbGet("SELECT COUNT(*) as total FROM builds WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL AND substr(shipped_at, 1, 10) >= date(?, '-29 days')", [todayStr]);
         const monthLearningSessions = await dbGet('SELECT COUNT(*) as total FROM learning WHERE date >= date(?, "-29 days")', [todayStr]);
 
         const monthCompletionAvg = await dbGet(`
             SELECT AVG(completion_rate) as avg_rate FROM (
                 SELECT d.date,
                        (CAST(SUM(CASE WHEN l.completed = 1 AND (t.category = 'life' OR t.shift_type = d.shift_type OR t.shift_type = 'all') THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(COUNT(CASE WHEN (t.category = 'life' OR t.shift_type = d.shift_type OR t.shift_type = 'all') THEN 1 END), 0)) * 100 as completion_rate
-                FROM days d
+                FROM (
+                    SELECT date, shift_type FROM days WHERE date >= date(?, '-29 days')
+                    UNION
+                    SELECT DISTINCT date, 'normal' as shift_type FROM daily_task_log WHERE date >= date(?, '-29 days') AND date NOT IN (SELECT date FROM days)
+                ) d
                 JOIN tasks t ON t.active = 1
                 LEFT JOIN daily_task_log l ON t.id = l.task_id AND l.date = d.date
-                WHERE d.date >= date(?, '-29 days')
                 GROUP BY d.date
             )
-        `, [todayStr]);
+        `, [todayStr, todayStr]);
 
         res.json({
             success: true,
@@ -599,11 +616,11 @@ app.get('/api/dashboard/summary', async (req, res) => {
                 shift_type: todayDay.shift_type,
                 planned_capacity: todayDay.planned_capacity,
                 dragon: todayDay.dragon,
-                deep_work_minutes: todayDeepWork.total,
-                total_tasks: todayTasksCount.total || 0,
-                done_tasks: todayTasksCount.done || 0,
-                daily_completion_percent: todayTasksCount.total ? Math.round((todayTasksCount.done / todayTasksCount.total) * 100) : 0,
-                mission_completion_percent: todayMissionTasks.total ? Math.round((todayMissionTasks.done / todayMissionTasks.total) * 100) : 0,
+                deep_work_minutes: todayDeepWork ? todayDeepWork.total : 0,
+                total_tasks: todayTasksCount ? todayTasksCount.total || 0 : 0,
+                done_tasks: todayTasksCount ? todayTasksCount.done || 0 : 0,
+                daily_completion_percent: todayTasksCount && todayTasksCount.total ? Math.round(((todayTasksCount.done || 0) / todayTasksCount.total) * 100) : 0,
+                mission_completion_percent: todayMissionTasks && todayMissionTasks.total ? Math.round(((todayMissionTasks.done || 0) / todayMissionTasks.total) * 100) : 0,
                 active_project: activeProject ? activeProject.name : 'None',
                 active_build: activeBuild ? `${activeBuild.feature_name} (${activeBuild.status})` : 'None'
             },
@@ -618,7 +635,7 @@ app.get('/api/dashboard/summary', async (req, res) => {
                 deep_work_hours: (monthDeepWork.total / 60).toFixed(1),
                 shipped_features: monthShippedFeatures.total,
                 learning_sessions: monthLearningSessions.total,
-                average_daily_completion: monthCompletionAvg.avg_rate ? Math.round(monthCompletionAvg.avg_rate) : 0
+                average_daily_completion: monthCompletionAvg && monthCompletionAvg.avg_rate ? Math.round(monthCompletionAvg.avg_rate) : 0
             }
         });
     } catch (err) {
@@ -632,34 +649,36 @@ app.get('/api/dashboard/trends', async (req, res) => {
     try {
         // Group by YYYY-MM
         const deepWorkMonthly = await dbAll(`
-            SELECT strftime('%Y-%m', date) as month,
+            SELECT substr(date, 1, 7) as month,
                    ROUND(SUM(duration_minutes) / 60.0, 1) as hours
             FROM deep_work_sessions
+            WHERE date IS NOT NULL AND date != ''
             GROUP BY month
             ORDER BY month ASC
             LIMIT 12
         `);
 
         const shippedMonthly = await dbAll(`
-            SELECT strftime('%Y-%m', shipped_at) as month,
+            SELECT substr(shipped_at, 1, 7) as month,
                    COUNT(*) as shipped_count
             FROM builds
-            WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL
+            WHERE status = 'SHIPPED' AND shipped_at IS NOT NULL AND shipped_at != ''
             GROUP BY month
             ORDER BY month ASC
             LIMIT 12
         `);
 
         const missionCompletionMonthly = await dbAll(`
-            SELECT strftime('%Y-%m', d.date) as month,
+            SELECT substr(d.date, 1, 7) as month,
                    ROUND(AVG(
                        CAST(
-                           (SELECT COUNT(*) FROM daily_task_log l JOIN tasks t ON l.task_id = t.id WHERE l.date = d.date AND l.completed = 1 AND t.category = 'mission') AS FLOAT
+                           (SELECT COUNT(*) FROM daily_task_log l JOIN tasks t ON l.task_id = t.id WHERE l.date = d.date AND l.completed = 1 AND t.category = 'mission' AND (t.shift_type = d.shift_type OR t.shift_type = 'all')) AS FLOAT
                        ) / NULLIF(
-                           (SELECT COUNT(*) FROM tasks WHERE active = 1 AND category = 'mission'), 0
+                           (SELECT COUNT(*) FROM tasks WHERE active = 1 AND category = 'mission' AND (shift_type = d.shift_type OR shift_type = 'all')), 0
                        ) * 100
                    ), 0) as mission_percent
             FROM days d
+            WHERE d.date IS NOT NULL AND d.date != ''
             GROUP BY month
             ORDER BY month ASC
             LIMIT 12
@@ -706,8 +725,8 @@ app.get('/api/shift-analysis', async (req, res) => {
         const shippedByShift = await dbAll(`
             SELECT d.shift_type, COUNT(b.id) as shipped_count
             FROM builds b
-            JOIN days d ON date(b.shipped_at) = d.date
-            WHERE b.status = 'SHIPPED'
+            JOIN days d ON substr(b.shipped_at, 1, 10) = d.date
+            WHERE b.status = 'SHIPPED' AND b.shipped_at IS NOT NULL
             GROUP BY d.shift_type
         `);
 

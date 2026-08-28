@@ -95,6 +95,12 @@ function setView(viewName) {
     else if (viewName === 'settings') renderSettingsView();
 }
 
+function onDateChanged() {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    const viewName = activeBtn ? activeBtn.dataset.view : 'today';
+    setView(viewName);
+}
+
 // =========================================================
 // 1. TODAY VIEW
 // =========================================================
@@ -187,8 +193,9 @@ async function renderToday(fetchFromApi = true) {
     const mProgText = document.getElementById("missionProgressText");
     if (mProgText) mProgText.textContent = missionPct + "%";
 
-    const totalTasks = tasks.length;
-    const totalDone = tasks.filter(t => t.completed).length;
+    const activeShiftTasks = tasks.filter(t => t.category === 'life' || t.shift_type === modeKey || t.shift_type === 'all');
+    const totalTasks = activeShiftTasks.length;
+    const totalDone = activeShiftTasks.filter(t => t.completed).length;
     const dailyPct = totalTasks ? Math.round((totalDone / totalTasks) * 100) : 0;
 
     const dProg = document.getElementById("dailyProgress");
@@ -312,7 +319,8 @@ function setProgressBar(barId, current, target) {
 // =========================================================
 
 async function renderDashboard() {
-    const res = await API.getDashboardSummary();
+    const selectedDate = (document.getElementById("datePicker") && document.getElementById("datePicker").value) ? document.getElementById("datePicker").value : todayString();
+    const res = await API.getDashboardSummary(selectedDate);
     if (!res.success) return;
 
     const t = res.today;
@@ -586,60 +594,102 @@ async function deleteBuild(id) {
 // =========================================================
 
 async function renderLearningView() {
-    const res = await API.getLearning('', 100);
-    if (!res.success) return;
+    if (document.getElementById("learnDate") && !document.getElementById("learnDate").value) {
+        document.getElementById("learnDate").value = currentDate || todayString();
+    }
 
-    const entries = res.learning;
-    const totalMins = entries.reduce((acc, x) => acc + x.duration_minutes, 0);
+    const res = await API.getLearning('', 100);
+    if (!res || !res.success) return;
+
+    const entries = res.learning || [];
+    const totalMins = entries.reduce((acc, x) => acc + (x.duration_minutes || 0), 0);
     const appliedCount = entries.filter(x => x.applied_to_build).length;
     const applyRatio = entries.length ? Math.round((appliedCount / entries.length) * 100) : 0;
 
-    document.getElementById("learnTotalHours").textContent = (totalMins / 60).toFixed(1) + " hrs";
-    document.getElementById("learnApplyRatio").textContent = applyRatio + "% Applied to Build";
+    if (document.getElementById("learnTotalHours")) {
+        document.getElementById("learnTotalHours").textContent = (totalMins / 60).toFixed(1) + " hrs";
+    }
+    if (document.getElementById("learnApplyRatio")) {
+        document.getElementById("learnApplyRatio").textContent = applyRatio + "% Applied to Build";
+    }
 
     const tbody = document.getElementById("learningTableBody");
-    tbody.innerHTML = entries.map(l => `
-        <tr>
-            <td>${l.date}</td>
-            <td><strong>${l.topic}</strong></td>
-            <td>${l.purpose || '-'}</td>
-            <td>${l.duration_minutes} mins</td>
-            <td>${l.project_name || '-'} / ${l.feature_name || '-'}</td>
-            <td>
-                <span class="badge ${l.applied_to_build ? 'badge-shipped' : ''}">
-                    ${l.applied_to_build ? '✓ APPLIED' : 'THEORY ONLY'}
-                </span>
-            </td>
-            <td>
-                <button class="btn btn-danger" style="padding:4px 8px; font-size:9px;" onclick="deleteLearning(${l.id})">DELETE</button>
-            </td>
-        </tr>
-    `).join("");
+    if (tbody) {
+        if (entries.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary); padding: 16px;">No learning sessions logged yet.</td></tr>';
+        } else {
+            tbody.innerHTML = entries.map(l => `
+                <tr>
+                    <td>${l.date}</td>
+                    <td><strong>${l.topic}</strong></td>
+                    <td>${l.purpose || '-'}</td>
+                    <td>${l.duration_minutes} mins</td>
+                    <td>${l.project_name || '-'}${l.feature_name ? ' / ' + l.feature_name : ''}</td>
+                    <td>
+                        <span class="badge ${l.applied_to_build ? 'badge-shipped' : ''}">
+                            ${l.applied_to_build ? '✓ APPLIED' : 'THEORY ONLY'}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger" style="padding:4px 8px; font-size:9px;" onclick="deleteLearning(${l.id})">DELETE</button>
+                    </td>
+                </tr>
+            `).join("");
+        }
+    }
 
     populateProjectDropdowns();
 }
 
 async function logLearningSession(e) {
     if (e) e.preventDefault();
-    const date = document.getElementById("learnDate").value || todayString();
-    const topic = document.getElementById("learnTopic").value;
-    const purpose = document.getElementById("learnPurpose").value;
-    const duration_minutes = parseInt(document.getElementById("learnDuration").value);
-    const project_id = document.getElementById("learnProject").value || null;
-    const build_id = document.getElementById("learnBuild").value || null;
-    const applied_to_build = document.getElementById("learnApplied").checked;
+    const date = document.getElementById("learnDate")?.value || currentDate || todayString();
+    const topic = document.getElementById("learnTopic")?.value;
+    const purpose = document.getElementById("learnPurpose")?.value || "";
+    const duration_minutes = parseInt(document.getElementById("learnDuration")?.value);
+    const project_id = document.getElementById("learnProject")?.value || null;
+    const build_id = document.getElementById("learnBuild")?.value || null;
+    const applied_to_build = document.getElementById("learnApplied") ? document.getElementById("learnApplied").checked : false;
 
-    if (!topic || !duration_minutes) return alert("Topic and Duration required.");
+    if (!topic || !duration_minutes || isNaN(duration_minutes)) {
+        return alert("Topic and Duration (in minutes) are required.");
+    }
 
-    await API.logLearning({ date, topic, purpose, duration_minutes, project_id, build_id, applied_to_build });
-    toast("LEARNING SESSION LOGGED");
-    renderLearningView();
+    const res = await API.logLearning({ date, topic, purpose, duration_minutes, project_id, build_id, applied_to_build });
+    if (res && res.success) {
+        toast("LEARNING SESSION LOGGED");
+        if (document.getElementById("learnTopic")) document.getElementById("learnTopic").value = "";
+        if (document.getElementById("learnPurpose")) document.getElementById("learnPurpose").value = "";
+        if (document.getElementById("learnDuration")) document.getElementById("learnDuration").value = "";
+        renderLearningView();
+    } else {
+        alert("Failed to save learning entry: " + (res?.error || "Unknown error"));
+    }
 }
 
 async function deleteLearning(id) {
     if (!confirm("Delete learning entry?")) return;
     await API.deleteLearning(id);
     renderLearningView();
+}
+
+async function updateBuildOptions(projSelectId, buildSelectId) {
+    const projEl = document.getElementById(projSelectId);
+    const buildEl = document.getElementById(buildSelectId);
+    if (!projEl || !buildEl) return;
+
+    const projId = projEl.value;
+    if (!projId) {
+        buildEl.innerHTML = '<option value="">-- Select Feature Build --</option>';
+        return;
+    }
+    const bRes = await API.getBuilds(projId);
+    if (bRes && bRes.success) {
+        const currentVal = buildEl.value;
+        buildEl.innerHTML = '<option value="">-- Select Feature Build --</option>' +
+            bRes.builds.map(b => `<option value="${b.id}">${b.feature_name}</option>`).join("");
+        if (currentVal) buildEl.value = currentVal;
+    }
 }
 
 // Helper to populate project dropdowns
@@ -657,15 +707,8 @@ async function populateProjectDropdowns() {
         if (current) el.value = current;
     });
 
-    // Populate builds based on project selection
-    const projId = document.getElementById("dwProject") ? document.getElementById("dwProject").value : '';
-    if (projId && document.getElementById("dwBuild")) {
-        const bRes = await API.getBuilds(projId);
-        if (bRes.success) {
-            document.getElementById("dwBuild").innerHTML = '<option value="">-- Select Feature Build --</option>' +
-                bRes.builds.map(b => `<option value="${b.id}">${b.feature_name}</option>`).join("");
-        }
-    }
+    await updateBuildOptions("dwProject", "dwBuild");
+    await updateBuildOptions("learnProject", "learnBuild");
 }
 
 // =========================================================
